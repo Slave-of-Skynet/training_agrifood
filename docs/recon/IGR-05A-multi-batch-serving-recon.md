@@ -719,12 +719,29 @@ The following 10 decision packets are submitted for Human Integrator review and 
 - **Classification:** `DECISION`
 - **Accepted by:** Vladimir / Human Integrator
 - **Date:** `2026-09-23`
-- **New default:** `2025-11-29T00:00:00Z <= dispatch_datetime < 2025-12-01T00:00:00Z` (48 hours).
+- **New default (historical; superseded in timezone representation by ADR 0006):** `2025-11-29T00:00:00Z <= dispatch_datetime < 2025-12-01T00:00:00Z` (48 hours; see TEMP-R1 / ADR 0006 amendment below for canonical `+03:00` notation).
 - **Scope of amendment:** These automatic bounds apply only when both `window_start` and `window_end` are omitted. Clients may supply another valid replay window.
 - **Preserved D2 semantics:** Both explicit bounds are required together; one supplied bound or `window_start >= window_end` returns HTTP `400`. Membership uses `storage_sessions.dispatch_datetime` and a half-open interval. The replay window bounds the compute cohort; pagination bounds only the response payload. D1 and D3–D10 are unchanged.
 - **Evidence record — `FACT / POST-IMPLEMENTATION EVIDENCE`:** The pinned held-out cohort contains 900 batches and its earliest `dispatch_datetime` is `2025-05-25 15:35:24`. The originally accepted May 1–3 window returns `0` eligible candidates, contradicting the original IGR-05A estimate of approximately 5–15 for that interval. The Nov 29–Dec 1 window contains `18` eligible candidates across 3 crop types and 8 facilities; all fit within the accepted default page size of 20. This correction was accepted after IGR-05B implementation and configured-runtime verification (PR #49). The new bounds provide a deterministic replay/demo default for the pinned training snapshot, not an agronomic optimum, production recommendation, current window, or representative operational shift.
 
-The decision history is: original IGR-05A recon assumption → original Human Gate May 1–3 decision → IGR-05B implementation evidence → contradiction discovered in the pinned held-out cohort → IGR05-D2R Human correction.
+The decision history is: original IGR-05A recon assumption → original Human Gate May 1–3 decision → IGR-05B implementation evidence → contradiction discovered in the pinned held-out cohort → IGR05-D2R Human correction → TEMP-R1 / ADR 0006 source timestamp semantics correction.
+
+#### TEMP-R1 / ADR 0006 amendment — accepted 2026-09-23
+
+- **Classification:** `DECISION / OFFICIAL-SOURCE RECONCILIATION`
+- **Accepted by:** Vladimir / Human Integrator
+- **Date:** `2026-09-23`
+- **ADR reference:** [ADR 0006](../decisions/0006-source-time-semantics.md)
+- **Canonical default:** `2025-11-29T00:00:00+03:00 <= dispatch_datetime < 2025-12-01T00:00:00+03:00` (48 hours).
+
+**Narrative:**
+- **D2R preserved:**
+  - `Nov 29 00:00 → Dec 1 00:00`
+  - 48-hour source-local calendar window
+  - same pinned 18-batch cohort
+- **D2R corrected:**
+  - previous `Z` notation incorrectly implied UTC source timestamps
+  - canonical effective bounds are now `+03:00` (`2025-11-29T00:00:00+03:00` to `2025-12-01T00:00:00+03:00`)
 
 ---
 
