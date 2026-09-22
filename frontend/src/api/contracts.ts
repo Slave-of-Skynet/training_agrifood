@@ -70,3 +70,12 @@ export interface RiskAssessment {
   reliability: Reliability;
   provenance: Provenance;
 }
+
+export interface RiskAssessmentCollectionResponse {
+  items: RiskAssessment[];
+  total_count: number;
+  window_start: string;
+  window_end: string;
+  facility_id: string | null;
+  engine_version: string;
+}

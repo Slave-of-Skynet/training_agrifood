@@ -125,3 +125,12 @@ class RiskAssessment(ContractModel):
         elif self.risk is None:
             raise ValueError("assessed assessments require a risk estimate")
         return self
+
+
+class RiskAssessmentCollectionResponse(ContractModel):
+    items: list[RiskAssessment]
+    total_count: int
+    window_start: datetime
+    window_end: datetime
+    facility_id: str | None
+    engine_version: str
