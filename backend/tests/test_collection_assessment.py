@@ -25,8 +25,8 @@ def _collection_runtime() -> AnalyticsRuntimeContext:
         for row in table.rows:
             for key, value in row.items():
                 if isinstance(value, str):
-                    row[key] = value.replace("2024-09-", "2025-04-").replace(
-                        "2024-10-", "2025-05-"
+                    row[key] = value.replace("2024-09-", "2025-10-").replace(
+                        "2024-10-", "2025-11-"
                     )
 
     snapshot["facilities"].rows.append({
@@ -68,11 +68,11 @@ def _collection_runtime() -> AnalyticsRuntimeContext:
                 snapshot[name].rows.append(row)
 
     # Raw order starts with the lowest score; B and C tie at the top.
-    add("A", "apples", "2025-05-01 12:00:00")
-    add("C", "pears", "2025-05-02 12:00:00", "ZONE-TEST-02")
-    add("B", "pears", "2025-05-01 13:00:00")
-    add("D", "apples", "2025-05-03 00:00:00")
-    add("TRAINING", "pears", "2025-05-01 12:00:00")
+    add("A", "apples", "2025-11-29 12:00:00")
+    add("C", "pears", "2025-11-30 12:00:00", "ZONE-TEST-02")
+    add("B", "pears", "2025-11-29 13:00:00")
+    add("D", "apples", "2025-12-01 00:00:00")
+    add("TRAINING", "pears", "2025-11-29 12:00:00")
     return AnalyticsRuntimeContext(
         snapshot,
         CropMedianBaseline({"apples": 10.0, "pears": 90.0}, 50.0),
@@ -98,14 +98,17 @@ def test_default_window_global_rank_and_contract(runtime):
     raw_dispatch = runtime.snapshot["storage_sessions"].rows[0]["dispatch_datetime"]
     result = get_assessment_collection(runtime)
     assert isinstance(result, RiskAssessmentCollectionResponse)
-    assert result.window_start == datetime(2025, 5, 1, tzinfo=timezone.utc)
-    assert result.window_end == datetime(2025, 5, 3, tzinfo=timezone.utc)
+    assert result.window_start == datetime(2025, 11, 29, tzinfo=timezone.utc)
+    assert result.window_end == datetime(2025, 12, 1, tzinfo=timezone.utc)
     assert result.facility_id is None
     assert result.engine_version == ENGINE_VERSION
     assert result.total_count == 3
     assert [(item.batch_id, item.risk.score) for item in result.items] == [
         ("B", 0.9), ("C", 0.9), ("A", 0.1),
     ]
+    # D is exactly at the exclusive Dec 1 boundary; TRAINING is inside the window.
+    assert result.items
+    assert {item.batch_id for item in result.items}.isdisjoint({"D", "TRAINING"})
     assert runtime.snapshot["storage_sessions"].rows[0]["dispatch_datetime"] == raw_dispatch
     for item in result.items:
         assert item.status == "assessed"
@@ -122,12 +125,12 @@ def test_default_window_global_rank_and_contract(runtime):
 
 
 def test_explicit_half_open_window_facility_and_empty(runtime):
-    start = datetime(2025, 5, 1, 12, tzinfo=timezone.utc)
-    end = datetime(2025, 5, 2, 12, tzinfo=timezone.utc)
+    start = datetime(2025, 11, 29, 12, tzinfo=timezone.utc)
+    end = datetime(2025, 11, 30, 12, tzinfo=timezone.utc)
     result = get_assessment_collection(runtime, window_start=start, window_end=end)
     assert [item.batch_id for item in result.items] == ["B", "A"]
     # An offset boundary is converted to the same UTC clock as naive source rows.
-    offset_start = datetime.fromisoformat("2025-05-01T14:00:00+02:00")
+    offset_start = datetime.fromisoformat("2025-11-29T14:00:00+02:00")
     assert [item.batch_id for item in get_assessment_collection(
         runtime, window_start=offset_start, window_end=end,
     ).items] == ["B", "A"]
@@ -139,8 +142,8 @@ def test_explicit_half_open_window_facility_and_empty(runtime):
     assert all(zones[sessions[item.batch_id]["zone_id"]] == "FAC-TEST-02" for item in facility.items)
     empty = get_assessment_collection(
         runtime,
-        window_start=datetime(2025, 5, 10, tzinfo=timezone.utc),
-        window_end=datetime(2025, 5, 11, tzinfo=timezone.utc),
+        window_start=datetime(2025, 12, 10, tzinfo=timezone.utc),
+        window_end=datetime(2025, 12, 11, tzinfo=timezone.utc),
         facility_id="FAC-TEST-02",
     )
     assert empty.total_count == 0
@@ -185,7 +188,7 @@ def test_rank_before_slice_offset_and_page_bounds(runtime):
 
 
 def test_service_rejects_invalid_window_and_unknown_facility(runtime):
-    start = datetime(2025, 5, 1, tzinfo=timezone.utc)
+    start = datetime(2025, 11, 29, tzinfo=timezone.utc)
     with pytest.raises(InvalidWindowError):
         get_assessment_collection(runtime, window_start=start)
     with pytest.raises(InvalidWindowError):
@@ -193,7 +196,7 @@ def test_service_rejects_invalid_window_and_unknown_facility(runtime):
     with pytest.raises(InvalidWindowError):
         get_assessment_collection(runtime, window_start=start, window_end=start)
     with pytest.raises(InvalidWindowError):
-        get_assessment_collection(runtime, window_start=start, window_end=datetime(2025, 4, 30))
+        get_assessment_collection(runtime, window_start=start, window_end=datetime(2025, 11, 28))
     with pytest.raises(FacilityNotFoundError):
         get_assessment_collection(runtime, facility_id="UNKNOWN")
 
@@ -206,8 +209,8 @@ def test_http_collection_contract_and_single_batch_preservation(client):
     assert set(payload) == {
         "items", "total_count", "window_start", "window_end", "facility_id", "engine_version",
     }
-    assert payload["window_start"] == "2025-05-01T00:00:00Z"
-    assert payload["window_end"] == "2025-05-03T00:00:00Z"
+    assert payload["window_start"] == "2025-11-29T00:00:00Z"
+    assert payload["window_end"] == "2025-12-01T00:00:00Z"
     assert payload["total_count"] == 3
     assert [item["batch_id"] for item in payload["items"]] == ["B", "C", "A"]
     assert client.get("/api/v1/assessments/B").status_code == 200
@@ -221,16 +224,16 @@ def test_http_filters_validation_and_unavailable(client):
     ).json()["items"]] == ["C"]
     empty = client.get("/api/v1/assessments", params={
         "facility_id": "FAC-TEST-02",
-        "window_start": "2025-05-10T00:00:00Z",
-        "window_end": "2025-05-11T00:00:00Z",
+        "window_start": "2025-12-10T00:00:00Z",
+        "window_end": "2025-12-11T00:00:00Z",
     })
     assert empty.status_code == 200
     assert empty.json()["items"] == []
     assert empty.json()["total_count"] == 0
     for params in (
-        {"window_start": "2025-05-01T00:00:00Z"},
-        {"window_end": "2025-05-03T00:00:00Z"},
-        {"window_start": "2025-05-03T00:00:00Z", "window_end": "2025-05-01T00:00:00Z"},
+        {"window_start": "2025-11-29T00:00:00Z"},
+        {"window_end": "2025-12-01T00:00:00Z"},
+        {"window_start": "2025-12-01T00:00:00Z", "window_end": "2025-11-29T00:00:00Z"},
     ):
         assert client.get("/api/v1/assessments", params=params).status_code == 400
     assert client.get("/api/v1/assessments", params={"facility_id": "UNKNOWN"}).status_code == 404

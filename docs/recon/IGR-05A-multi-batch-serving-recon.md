@@ -712,7 +712,19 @@ The following 10 decision packets are submitted for Human Integrator review and 
   - *Shared-contract:* Query parameter specifications in OpenAPI docs and TypeScript clients.
 - **Igor recommendation:** Optional window with documented 48h default (Variant 1B + 2A-2), strict pair requirement (Variant 3A), and strict invalid interval validation (Variant 4A). However, the selection among all variants is strictly a **HUMAN DECISION REQUIRED for Vladimir**.
 - **Evidence:** Benchmark Mode (b) demonstrates: 5 distinct batches take ~0.36–0.37s; 20 batches take ~1.45s; 25 batches take ~1.85s; 50 batches take ~3.71s; unbounded 900-batch scan takes ~65s. Bounded windows protect API responsiveness.
-- **Vladimir decision:** **DECISION — accepted by Vladimir / Human Integrator on 2026-09-22:** Variants **1B + 2A-2 + 3A + 4A**. When both boundaries are absent, effective `window_start = 2025-05-01T00:00:00Z` and `window_end = 2025-05-03T00:00:00Z`. The window uses `storage_sessions.dispatch_datetime`. Supplying only one boundary returns HTTP `400`; `window_start >= window_end` returns HTTP `400`. Pagination is not a compute guard: the replay window bounds the matching cohort to be scored.
+- **Vladimir decision:** **DECISION — accepted by Vladimir / Human Integrator on 2026-09-22; SUPERSEDED BY IGR05-D2R on 2026-09-22 for the automatic default bounds only:** Variants **1B + 2A-2 + 3A + 4A**. When both boundaries are absent, effective `window_start = 2025-05-01T00:00:00Z` and `window_end = 2025-05-03T00:00:00Z`. The window uses `storage_sessions.dispatch_datetime`. Supplying only one boundary returns HTTP `400`; `window_start >= window_end` returns HTTP `400`. Pagination is not a compute guard: the replay window bounds the matching cohort to be scored.
+
+#### IGR05-D2R — accepted amendment to automatic default bounds
+
+- **Classification:** `DECISION`
+- **Accepted by:** Vladimir / Human Integrator
+- **Date:** `2026-09-22`
+- **New default:** `2025-11-29T00:00:00Z <= dispatch_datetime < 2025-12-01T00:00:00Z` (48 hours).
+- **Scope of amendment:** These automatic bounds apply only when both `window_start` and `window_end` are omitted. Clients may supply another valid replay window.
+- **Preserved D2 semantics:** Both explicit bounds are required together; one supplied bound or `window_start >= window_end` returns HTTP `400`. Membership uses `storage_sessions.dispatch_datetime` and a half-open interval. The replay window bounds the compute cohort; pagination bounds only the response payload. D1 and D3–D10 are unchanged.
+- **Evidence record — `FACT / POST-IMPLEMENTATION EVIDENCE`:** The pinned held-out cohort contains 900 batches and its earliest `dispatch_datetime` is `2025-05-25 15:35:24`. The originally accepted May 1–3 window returns `0` eligible candidates, contradicting the original IGR-05A estimate of approximately 5–15 for that interval. The Nov 29–Dec 1 window contains `18` eligible candidates across 3 crop types and 8 facilities; all fit within the accepted default page size of 20. This correction was accepted after IGR-05B implementation and configured-runtime verification (PR #49). The new bounds provide a deterministic replay/demo default for the pinned training snapshot, not an agronomic optimum, production recommendation, current window, or representative operational shift.
+
+The decision history is: original IGR-05A recon assumption → original Human Gate May 1–3 decision → IGR-05B implementation evidence → contradiction discovered in the pinned held-out cohort → IGR05-D2R Human correction.
 
 ---
 
@@ -949,4 +961,4 @@ The following topics are explicitly **NOT** decided by this recon and remain pre
 
 This document constitutes the complete deliverables for task **IGR-05A: Multi-Batch Serving Recon & Decision Packet**. It is submitted to **Vladimir (Integrator / Project Brain)** for formal Human Gate review under PR #47.
 
-**Current Human Gate status (2026-09-22):** Vladimir / Human Integrator accepted all 10 decisions (`IGR05-D1` through `IGR05-D10`) recorded above. **IGR-05A HUMAN GATE ACCEPTED / IGR-05B CONCEPTUALLY UNBLOCKED.** This reconciliation records the contract; IGR-05B implementation has not been performed.
+**Current Human Gate and implementation status (2026-09-22):** Vladimir / Human Integrator accepted D1–D10 and the D2R amendment above. **IGR-05A HUMAN GATE ACCEPTED; IGR-05B IMPLEMENTED / ACCEPTED / HUMAN INTEGRATED via PR #49.** The original pre-implementation analysis and workflow records above remain historical; the May 1–3 default is superseded only for omitted query bounds.
