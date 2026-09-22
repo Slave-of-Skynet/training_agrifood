@@ -11,8 +11,8 @@ from app.runtime.context import AnalyticsRuntimeContext
 from app.services.baseline_assessment import build_baseline_assessment
 
 
-DEFAULT_WINDOW_START = datetime(2025, 5, 1, tzinfo=timezone.utc)
-DEFAULT_WINDOW_END = datetime(2025, 5, 3, tzinfo=timezone.utc)
+DEFAULT_WINDOW_START = datetime(2025, 11, 29, tzinfo=timezone.utc)
+DEFAULT_WINDOW_END = datetime(2025, 12, 1, tzinfo=timezone.utc)
 
 
 class InvalidWindowError(ValueError):
