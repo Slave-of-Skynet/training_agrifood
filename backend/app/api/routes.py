@@ -3,14 +3,17 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
-from app.domain.assessment import HealthResponse, RiskAssessment
+from app.domain.assessment import HealthResponse, RiskAssessment, RiskAssessmentCollectionResponse
 from app.services.demo_assessment import build_demo_assessment
 from app.ingestion.canonical_mapper import build_batch_assessment_input
 from app.runtime.artifact import DATASET_ID, ENGINE_VERSION, NOTICE
 from app.runtime.context import AnalyticsRuntimeContext, get_runtime
 from app.services.baseline_assessment import build_baseline_assessment
+from app.services.collection_assessment import (
+    FacilityNotFoundError, InvalidWindowError, get_assessment_collection,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +34,36 @@ def demo_assessment() -> RiskAssessment:
     """Return a synthetic contract fixture; this is not challenge data."""
 
     return build_demo_assessment()
+
+
+@router.get("/assessments", response_model=RiskAssessmentCollectionResponse)
+def assessment_collection(
+    response: Response,
+    window_start: datetime | None = None,
+    window_end: datetime | None = None,
+    facility_id: str | None = None,
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+    runtime: AnalyticsRuntimeContext = Depends(get_runtime),
+) -> RiskAssessmentCollectionResponse:
+    headers = {"Cache-Control": "no-store"}
+    response.headers.update(headers)
+    try:
+        return get_assessment_collection(
+            runtime,
+            window_start=window_start,
+            window_end=window_end,
+            facility_id=facility_id,
+            limit=limit,
+            offset=offset,
+        )
+    except InvalidWindowError as error:
+        raise HTTPException(400, str(error), headers=headers) from None
+    except FacilityNotFoundError:
+        raise HTTPException(404, "Facility not found", headers=headers) from None
+    except Exception:
+        logger.exception("Dataset-backed collection assessment failed")
+        raise HTTPException(500, "Assessment collection could not be completed", headers=headers) from None
 
 
 @router.get("/assessments/{batch_id}", response_model=RiskAssessment)
