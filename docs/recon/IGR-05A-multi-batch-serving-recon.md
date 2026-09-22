@@ -682,7 +682,7 @@ The following 10 decision packets are submitted for Human Integrator review and 
   - *Shared-contract:* Option 1 extends the existing route surface without breaking single-batch routes.
 - **Igor recommendation:** Option 1 (`GET /api/v1/assessments`).
 - **Evidence:** Standard FastAPI route design in `backend/app/api/routes.py`.
-- **Vladimir decision:** **PENDING**
+- **Vladimir decision:** **DECISION — accepted by Vladimir / Human Integrator on 2026-09-22:** `GET /api/v1/assessments` is the collection resource and complements the existing `GET /api/v1/assessments/{batch_id}`.
 
 ---
 
@@ -712,7 +712,7 @@ The following 10 decision packets are submitted for Human Integrator review and 
   - *Shared-contract:* Query parameter specifications in OpenAPI docs and TypeScript clients.
 - **Igor recommendation:** Optional window with documented 48h default (Variant 1B + 2A-2), strict pair requirement (Variant 3A), and strict invalid interval validation (Variant 4A). However, the selection among all variants is strictly a **HUMAN DECISION REQUIRED for Vladimir**.
 - **Evidence:** Benchmark Mode (b) demonstrates: 5 distinct batches take ~0.36–0.37s; 20 batches take ~1.45s; 25 batches take ~1.85s; 50 batches take ~3.71s; unbounded 900-batch scan takes ~65s. Bounded windows protect API responsiveness.
-- **Vladimir decision:** **PENDING — HUMAN DECISION REQUIRED**
+- **Vladimir decision:** **DECISION — accepted by Vladimir / Human Integrator on 2026-09-22:** Variants **1B + 2A-2 + 3A + 4A**. When both boundaries are absent, effective `window_start = 2025-05-01T00:00:00Z` and `window_end = 2025-05-03T00:00:00Z`. The window uses `storage_sessions.dispatch_datetime`. Supplying only one boundary returns HTTP `400`; `window_start >= window_end` returns HTTP `400`. Pagination is not a compute guard: the replay window bounds the matching cohort to be scored.
 
 ---
 
@@ -728,7 +728,7 @@ The following 10 decision packets are submitted for Human Integrator review and 
   - *Shared-contract:* Documented in integration contract.
 - **Igor recommendation:** Option 1 (Half-open interval `[start, end)` with `batch_id ASC` tie-breaker).
 - **Evidence:** Time-series convention across data engineering; ADR 0003 D3 compliance.
-- **Vladimir decision:** **PENDING**
+- **Vladimir decision:** **DECISION — accepted by Vladimir / Human Integrator on 2026-09-22:** Half-open interval `window_start <= dispatch_datetime < window_end`; global ranking `risk.score DESC, batch_id ASC`.
 
 ---
 
@@ -744,7 +744,7 @@ The following 10 decision packets are submitted for Human Integrator review and 
   - *Shared-contract:* HTTP status code contracts.
 - **Igor recommendation:** Option 1 (Strict validation, 404 on unknown facility ID).
 - **Evidence:** `facilities.csv` contains exactly 10 facilities (`FAC-001` through `FAC-010`).
-- **Vladimir decision:** **PENDING**
+- **Vladimir decision:** **DECISION — accepted by Vladimir / Human Integrator on 2026-09-22:** `facility_id` is an optional UI/context filter, not an operational jurisdiction partition. Unknown `facility_id` returns HTTP `404`; an existing facility with no matching batches returns HTTP `200` with an empty collection.
 
 ---
 
@@ -761,7 +761,7 @@ The following 10 decision packets are submitted for Human Integrator review and 
   - *Shared-contract:* Requires new shared Pydantic model and TypeScript interface.
 - **Igor recommendation:** Option 2 (Collection envelope with `items: list[RiskAssessment]`).
 - **Evidence:** ADR 0004 APR2-D2 triage requirements.
-- **Vladimir decision:** **PENDING**
+- **Vladimir decision:** **DECISION — accepted by Vladimir / Human Integrator on 2026-09-22:** Return `RiskAssessmentCollectionResponse` with at least `items: list[RiskAssessment]`, `total_count`, `window_start`, `window_end`, `facility_id`, and `engine_version`. Preserve the existing `RiskAssessment` model.
 
 ---
 
@@ -778,7 +778,7 @@ The following 10 decision packets are submitted for Human Integrator review and 
   - *Shared-contract:* Query parameter definitions.
 - **Igor recommendation:** Option 1 (Limit / offset applied after global ranking).
 - **Evidence:** 900 held-out batches fit in memory; sorting and slicing candidate lists in Python takes < 2 ms.
-- **Vladimir decision:** **PENDING**
+- **Vladimir decision:** **DECISION — accepted by Vladimir / Human Integrator on 2026-09-22:** Use `limit`/`offset` pagination after filtering, canonical mapping and scoring of **all** matching candidates, and global deterministic ranking. Slice-before-rank is prohibited.
 
 ---
 
@@ -800,7 +800,7 @@ The following 10 decision packets are submitted for Human Integrator review and 
   - *Shared-contract:* Validation error (HTTP 422) if `limit > max`.
 - **Igor recommendation:** Option 2 (Maximum `limit = 100`, default `limit = 50`) for response page size; any compute latency target requires a separate replay-window bound. This remains subject to the IGR05-D7 Human Gate decision.
 - **Evidence:** Local benchmark probe: Mode (a) same-batch repeated: 50 calls = 0.46s (9.14 ms/call), 100 calls = 0.91s (9.10 ms/call); Mode (b) distinct-batch: 50 calls = 3.71s (74.18 ms/call), 100 calls = 7.23s (72.27 ms/call).
-- **Vladimir decision:** **PENDING**
+- **Vladimir decision:** **DECISION — accepted by Vladimir / Human Integrator on 2026-09-22:** Default `limit = 20`; maximum `limit = 50`. The limit bounds only the returned page/payload, not the cost of scoring the entire matching replay cohort.
 
 ---
 
@@ -816,7 +816,7 @@ The following 10 decision packets are submitted for Human Integrator review and 
   - *Shared-contract:* HTTP status codes.
 - **Igor recommendation:** Option 1 (HTTP 200 with empty list).
 - **Evidence:** REST standards; avoids treating valid empty search as server/resource error.
-- **Vladimir decision:** **PENDING**
+- **Vladimir decision:** **DECISION — accepted by Vladimir / Human Integrator on 2026-09-22:** A valid collection request with zero matches returns HTTP `200`, `items: []`, and `total_count: 0`, with the other accepted envelope context.
 
 ---
 
@@ -833,7 +833,7 @@ The following 10 decision packets are submitted for Human Integrator review and 
   - *Shared-contract:* Preserves truthfulness and audit integrity.
 - **Igor recommendation:** Option 1 (Fail-Closed Atomic HTTP 500).
 - **Evidence:** VDR-06B confirmed that 100% of the 900 held-out batches map successfully with 0 errors.
-- **Vladimir decision:** **PENDING**
+- **Vladimir decision:** **DECISION — accepted by Vladimir / Human Integrator on 2026-09-22:** Any canonical mapping failure for a matching eligible candidate fails the entire request closed with HTTP `500`. No silent skip, fabricated `insufficient_data`, or partial-success response.
 
 ---
 
@@ -850,7 +850,7 @@ The following 10 decision packets are submitted for Human Integrator review and 
   - *Shared-contract:* Internal architecture only.
 - **Igor recommendation:** Option 1 (Dedicated application service in `backend/app/services/`).
 - **Evidence:** Architecture guidelines in `docs/architecture.md`.
-- **Vladimir decision:** **PENDING**
+- **Vladimir decision:** **DECISION — accepted by Vladimir / Human Integrator on 2026-09-22:** Collection orchestration belongs in the dedicated application-service module `backend/app/services/collection_assessment.py`; the HTTP route remains a thin controller.
 
 ---
 
@@ -949,4 +949,4 @@ The following topics are explicitly **NOT** decided by this recon and remain pre
 
 This document constitutes the complete deliverables for task **IGR-05A: Multi-Batch Serving Recon & Decision Packet**. It is submitted to **Vladimir (Integrator / Project Brain)** for formal Human Gate review under PR #47.
 
-All 10 decision items (`IGR05-D1` through `IGR05-D10`) remain with status **PENDING** awaiting Vladimir's explicit decision. Implementation under task **IGR-05B** remains strictly blocked until this review is concluded.
+**Current Human Gate status (2026-09-22):** Vladimir / Human Integrator accepted all 10 decisions (`IGR05-D1` through `IGR05-D10`) recorded above. **IGR-05A HUMAN GATE ACCEPTED / IGR-05B CONCEPTUALLY UNBLOCKED.** This reconciliation records the contract; IGR-05B implementation has not been performed.
