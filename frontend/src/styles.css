@@ -451,6 +451,96 @@ button:focus-visible {
   }
 }
 
+.lookup-panel {
+  margin-bottom: 1.5rem;
+}
+
+.lookup-form {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-top: 1rem;
+}
+
+.lookup-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.lookup-label {
+  color: #436b56;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lookup-input {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border: 1px solid #c8d4cc;
+  border-radius: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 1rem;
+  color: #173126;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lookup-input:focus-visible {
+  border-color: #245943;
+  outline: 2px solid #245943;
+  outline-offset: 1px;
+}
+
+.lookup-button {
+  height: 2.75rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: 0.5rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.lookup-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.assessment-idle-panel {
+  min-height: 8rem;
+}
+
+.assessment-loading-panel {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  min-height: 8rem;
+}
+
+.assessment-error-panel {
+  border-left: 0.35rem solid #dc2626;
+  background: #fffafa;
+}
+
+.assessment-error-panel h2 {
+  color: #991b1b;
+}
+
+.assessment-error-message {
+  margin-top: 0.75rem;
+}
+
+.error-text {
+  margin: 0;
+  color: #7f1d1d;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  font-weight: 500;
+}
+
 @media (max-width: 840px) {
   .app-shell {
     padding: 2.25rem 0 3.5rem;
@@ -466,6 +556,15 @@ button:focus-visible {
     align-items: flex-start;
     flex-direction: column;
     gap: 1rem;
+  }
+
+  .lookup-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lookup-button {
+    width: 100%;
   }
 }
 
