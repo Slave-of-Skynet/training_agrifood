@@ -14,7 +14,7 @@ from app.main import create_app
 from app.runtime.artifact import DATASET_ID, ENGINE_VERSION
 from app.runtime.context import AnalyticsRuntimeContext, get_runtime
 from app.services.collection_assessment import (
-    FacilityNotFoundError, InvalidWindowError, get_assessment_collection,
+    FacilityNotFoundError, InvalidWindowError, SOURCE_TIMEZONE, get_assessment_collection,
 )
 from test_ingestion_canonical import _make_synthetic_snapshot
 
@@ -98,8 +98,8 @@ def test_default_window_global_rank_and_contract(runtime):
     raw_dispatch = runtime.snapshot["storage_sessions"].rows[0]["dispatch_datetime"]
     result = get_assessment_collection(runtime)
     assert isinstance(result, RiskAssessmentCollectionResponse)
-    assert result.window_start == datetime(2025, 11, 29, tzinfo=timezone.utc)
-    assert result.window_end == datetime(2025, 12, 1, tzinfo=timezone.utc)
+    assert result.window_start == datetime(2025, 11, 29, tzinfo=SOURCE_TIMEZONE)
+    assert result.window_end == datetime(2025, 12, 1, tzinfo=SOURCE_TIMEZONE)
     assert result.facility_id is None
     assert result.engine_version == ENGINE_VERSION
     assert result.total_count == 3
@@ -125,12 +125,12 @@ def test_default_window_global_rank_and_contract(runtime):
 
 
 def test_explicit_half_open_window_facility_and_empty(runtime):
-    start = datetime(2025, 11, 29, 12, tzinfo=timezone.utc)
-    end = datetime(2025, 11, 30, 12, tzinfo=timezone.utc)
+    start = datetime(2025, 11, 29, 12, tzinfo=SOURCE_TIMEZONE)
+    end = datetime(2025, 11, 30, 12, tzinfo=SOURCE_TIMEZONE)
     result = get_assessment_collection(runtime, window_start=start, window_end=end)
     assert [item.batch_id for item in result.items] == ["B", "A"]
-    # An offset boundary is converted to the same UTC clock as naive source rows.
-    offset_start = datetime.fromisoformat("2025-11-29T14:00:00+02:00")
+    # An offset boundary is converted to the same source clock as naive source rows.
+    offset_start = datetime.fromisoformat("2025-11-29T11:00:00+02:00")
     assert [item.batch_id for item in get_assessment_collection(
         runtime, window_start=offset_start, window_end=end,
     ).items] == ["B", "A"]
@@ -142,8 +142,8 @@ def test_explicit_half_open_window_facility_and_empty(runtime):
     assert all(zones[sessions[item.batch_id]["zone_id"]] == "FAC-TEST-02" for item in facility.items)
     empty = get_assessment_collection(
         runtime,
-        window_start=datetime(2025, 12, 10, tzinfo=timezone.utc),
-        window_end=datetime(2025, 12, 11, tzinfo=timezone.utc),
+        window_start=datetime(2025, 12, 10, tzinfo=SOURCE_TIMEZONE),
+        window_end=datetime(2025, 12, 11, tzinfo=SOURCE_TIMEZONE),
         facility_id="FAC-TEST-02",
     )
     assert empty.total_count == 0
@@ -209,8 +209,8 @@ def test_http_collection_contract_and_single_batch_preservation(client):
     assert set(payload) == {
         "items", "total_count", "window_start", "window_end", "facility_id", "engine_version",
     }
-    assert payload["window_start"] == "2025-11-29T00:00:00Z"
-    assert payload["window_end"] == "2025-12-01T00:00:00Z"
+    assert payload["window_start"] == "2025-11-29T00:00:00+03:00"
+    assert payload["window_end"] == "2025-12-01T00:00:00+03:00"
     assert payload["total_count"] == 3
     assert [item["batch_id"] for item in payload["items"]] == ["B", "C", "A"]
     assert client.get("/api/v1/assessments/B").status_code == 200
@@ -256,3 +256,139 @@ def test_mapping_failure_fails_entire_page(client, runtime):
     assert response.status_code == 500
     assert response.headers["cache-control"] == "no-store"
     assert response.json() == {"detail": "Assessment collection could not be completed"}
+
+
+def test_source_time_semantics_distinguishing_old_utc_clock(runtime):
+    """Verify source-local timestamp semantics and equivalent aware API boundaries (TEMP-R1).
+
+    Under the old _utc_clock implementation:
+    - Naive source row '2025-11-29 00:30:00' was incorrectly assigned UTC (2025-11-29T00:30:00Z).
+    - Source-local aware window [2025-11-29T00:00:00+03:00, 2025-11-29T01:00:00+03:00) was
+      converted to UTC [2025-11-28T21:00:00Z, 2025-11-28T22:00:00Z), completely missing the row.
+    - Thus, source-local aware and naive queries gave conflicting results, and equivalent
+      physical instants did not match naive queries.
+    """
+    # 9.2: Create synthetic held-out batches at specific source-local timestamps
+    source_batch = runtime.snapshot["batches"].rows[0]
+    source_session = runtime.snapshot["storage_sessions"].rows[0]
+    source_checks = [r for r in runtime.snapshot["quality_checks"].rows if r["batch_id"] == "A"]
+    source_shipment = runtime.snapshot["shipments"].rows[0]
+
+    def add_probe(batch_id: str, dispatch_str: str) -> None:
+        runtime.snapshot["batches"].rows.append({**source_batch, "batch_id": batch_id, "crop_type": "apples"})
+        runtime.snapshot["storage_sessions"].rows.append({
+            **source_session, "batch_id": batch_id, "storage_session_id": f"SES-{batch_id}",
+            "dispatch_datetime": dispatch_str, "planned_dispatch_datetime": dispatch_str,
+        })
+        runtime.snapshot["quality_checks"].rows.extend([
+            {**r, "batch_id": batch_id, "check_id": f"{r['check_id']}-{batch_id}"}
+            for r in source_checks
+        ])
+        runtime.snapshot["shipments"].rows.append({
+            **source_shipment, "batch_id": batch_id, "shipment_id": f"SHP-{batch_id}",
+        })
+
+    add_probe("BATCH-INSIDE-0030", "2025-11-29 00:30:00")
+    add_probe("BATCH-EXCLUDED-0100", "2025-11-29 01:00:00")
+    new_held_out = frozenset(runtime.held_out_ids | {"BATCH-INSIDE-0030", "BATCH-EXCLUDED-0100"})
+    probe_runtime = AnalyticsRuntimeContext(runtime.snapshot, runtime.baseline, runtime.training_ids, new_held_out)
+
+    # 9.1: Default response timezone
+    default_result = get_assessment_collection(probe_runtime)
+    assert default_result.window_start == datetime(2025, 11, 29, 0, 0, 0, tzinfo=SOURCE_TIMEZONE)
+    assert default_result.window_end == datetime(2025, 12, 1, 0, 0, 0, tzinfo=SOURCE_TIMEZONE)
+    assert str(default_result.window_start.tzinfo) == "UTC+03:00"
+
+    # 9.3: Equivalent aware boundaries describe the exact same physical interval
+    # Source-local aware (+03:00)
+    w_source_aware = get_assessment_collection(
+        probe_runtime,
+        window_start=datetime.fromisoformat("2025-11-29T00:00:00+03:00"),
+        window_end=datetime.fromisoformat("2025-11-29T01:00:00+03:00"),
+    )
+    # UTC equivalent (instant is identical: 2025-11-28 21:00:00Z to 22:00:00Z)
+    w_utc = get_assessment_collection(
+        probe_runtime,
+        window_start=datetime.fromisoformat("2025-11-28T21:00:00Z"),
+        window_end=datetime.fromisoformat("2025-11-28T22:00:00Z"),
+    )
+    # +02:00 equivalent (instant is identical: 2025-11-28 23:00:00+02:00 to 2025-11-29 00:00:00+02:00)
+    w_plus2 = get_assessment_collection(
+        probe_runtime,
+        window_start=datetime.fromisoformat("2025-11-28T23:00:00+02:00"),
+        window_end=datetime.fromisoformat("2025-11-29T00:00:00+02:00"),
+    )
+
+    # 9.4: Naive explicit boundaries interpreted as source-local UTC+03
+    w_naive = get_assessment_collection(
+        probe_runtime,
+        window_start=datetime.fromisoformat("2025-11-29T00:00:00"),
+        window_end=datetime.fromisoformat("2025-11-29T01:00:00"),
+    )
+
+    # 9.5: Half-open boundary: BATCH-INSIDE-0030 is included; BATCH-EXCLUDED-0100 is excluded
+    expected_ids = ["BATCH-INSIDE-0030"]
+    for collection in (w_source_aware, w_utc, w_plus2, w_naive):
+        assert [item.batch_id for item in collection.items] == expected_ids
+        assert collection.total_count == 1
+        assert collection.window_start == datetime(2025, 11, 29, 0, 0, tzinfo=SOURCE_TIMEZONE)
+        assert collection.window_end == datetime(2025, 11, 29, 1, 0, tzinfo=SOURCE_TIMEZONE)
+
+    # HTTP endpoint serialization: test all representations via TestClient
+    app = create_app()
+    app.dependency_overrides[get_runtime] = lambda: probe_runtime
+    with TestClient(app) as test_client:
+        # Default window response contains +03:00
+        resp_def = test_client.get("/api/v1/assessments")
+        assert resp_def.status_code == 200
+        assert resp_def.json()["window_start"] == "2025-11-29T00:00:00+03:00"
+        assert resp_def.json()["window_end"] == "2025-12-01T00:00:00+03:00"
+
+        # Naive HTTP query
+        resp_naive = test_client.get(
+            "/api/v1/assessments",
+            params={"window_start": "2025-11-29T00:00:00", "window_end": "2025-11-29T01:00:00"},
+        )
+        assert resp_naive.status_code == 200
+        data_naive = resp_naive.json()
+        assert [item["batch_id"] for item in data_naive["items"]] == expected_ids
+        assert data_naive["window_start"] == "2025-11-29T00:00:00+03:00"
+        assert data_naive["window_end"] == "2025-11-29T01:00:00+03:00"
+
+        # UTC equivalent HTTP query
+        resp_utc = test_client.get(
+            "/api/v1/assessments",
+            params={"window_start": "2025-11-28T21:00:00Z", "window_end": "2025-11-28T22:00:00Z"},
+        )
+        assert resp_utc.status_code == 200
+        data_utc = resp_utc.json()
+        assert [item["batch_id"] for item in data_utc["items"]] == expected_ids
+        assert data_utc["window_start"] == "2025-11-29T00:00:00+03:00"
+        assert data_utc["window_end"] == "2025-11-29T01:00:00+03:00"
+
+        # +02:00 equivalent HTTP query
+        resp_plus2 = test_client.get(
+            "/api/v1/assessments",
+            params={"window_start": "2025-11-28T23:00:00+02:00", "window_end": "2025-11-29T00:00:00+02:00"},
+        )
+        assert resp_plus2.status_code == 200
+        data_plus2 = resp_plus2.json()
+        assert [item["batch_id"] for item in data_plus2["items"]] == expected_ids
+        assert data_plus2["window_start"] == "2025-11-29T00:00:00+03:00"
+        assert data_plus2["window_end"] == "2025-11-29T01:00:00+03:00"
+
+        # Source-local aware (+03:00) HTTP query
+        resp_aware = test_client.get(
+            "/api/v1/assessments",
+            params={"window_start": "2025-11-29T00:00:00+03:00", "window_end": "2025-11-29T01:00:00+03:00"},
+        )
+        assert resp_aware.status_code == 200
+        data_aware = resp_aware.json()
+        assert [item["batch_id"] for item in data_aware["items"]] == expected_ids
+        assert data_aware["window_start"] == "2025-11-29T00:00:00+03:00"
+        assert data_aware["window_end"] == "2025-11-29T01:00:00+03:00"
+
+    # 9.6: Raw source immutability
+    session_rows = {r["batch_id"]: r["dispatch_datetime"] for r in probe_runtime.snapshot["storage_sessions"].rows}
+    assert session_rows["BATCH-INSIDE-0030"] == "2025-11-29 00:30:00"
+    assert session_rows["BATCH-EXCLUDED-0100"] == "2025-11-29 01:00:00"

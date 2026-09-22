@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.domain.assessment import RiskAssessmentCollectionResponse
 from app.ingestion.canonical_mapper import build_batch_assessment_input
@@ -10,9 +10,10 @@ from app.runtime.artifact import DATASET_ID, ENGINE_VERSION, NOTICE
 from app.runtime.context import AnalyticsRuntimeContext
 from app.services.baseline_assessment import build_baseline_assessment
 
+SOURCE_TIMEZONE = timezone(timedelta(hours=3))
 
-DEFAULT_WINDOW_START = datetime(2025, 11, 29, tzinfo=timezone.utc)
-DEFAULT_WINDOW_END = datetime(2025, 12, 1, tzinfo=timezone.utc)
+DEFAULT_WINDOW_START = datetime(2025, 11, 29, tzinfo=SOURCE_TIMEZONE)
+DEFAULT_WINDOW_END = datetime(2025, 12, 1, tzinfo=SOURCE_TIMEZONE)
 
 
 class InvalidWindowError(ValueError):
@@ -23,11 +24,11 @@ class FacilityNotFoundError(ValueError):
     """The requested facility is absent from the accepted snapshot."""
 
 
-def _utc_clock(value: datetime) -> datetime:
-    """Compare source wall-clock timestamps and API boundaries on a UTC clock."""
+def _source_clock(value: datetime) -> datetime:
+    """Normalize timestamps to the fixed continuous UTC+03 source clock."""
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+        return value.replace(tzinfo=SOURCE_TIMEZONE)
+    return value.astimezone(SOURCE_TIMEZONE)
 
 
 def get_assessment_collection(
@@ -42,8 +43,8 @@ def get_assessment_collection(
     """Score every matching candidate, then rank globally before pagination."""
     if (window_start is None) != (window_end is None):
         raise InvalidWindowError("Both window boundaries are required together")
-    start = _utc_clock(window_start) if window_start is not None else DEFAULT_WINDOW_START
-    end = _utc_clock(window_end) if window_end is not None else DEFAULT_WINDOW_END
+    start = _source_clock(window_start) if window_start is not None else DEFAULT_WINDOW_START
+    end = _source_clock(window_end) if window_end is not None else DEFAULT_WINDOW_END
     if start >= end:
         raise InvalidWindowError("window_start must be before window_end")
 
@@ -62,7 +63,7 @@ def get_assessment_collection(
         batch_id = session["batch_id"]
         if batch_id not in runtime.held_out_ids:
             continue
-        dispatch = _utc_clock(datetime.fromisoformat(session["dispatch_datetime"]))
+        dispatch = _source_clock(datetime.fromisoformat(session["dispatch_datetime"]))
         if not start <= dispatch < end:
             continue
         if facility_id is not None and zone_facilities[session["zone_id"]] != facility_id:
