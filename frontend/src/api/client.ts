@@ -1,4 +1,4 @@
-import type { HealthResponse, RiskAssessment } from "./contracts";
+import type { HealthResponse, RiskAssessment, RiskAssessmentCollectionResponse } from "./contracts";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -45,4 +45,10 @@ export function getDemoAssessment(signal?: AbortSignal): Promise<RiskAssessment>
 export function getAssessment(batchId: string, signal?: AbortSignal): Promise<RiskAssessment> {
   const encodedId = encodeURIComponent(batchId.trim());
   return getJson<RiskAssessment>(`/api/v1/assessments/${encodedId}`, signal);
+}
+
+export function getAssessmentCollection(
+  signal?: AbortSignal,
+): Promise<RiskAssessmentCollectionResponse> {
+  return getJson<RiskAssessmentCollectionResponse>("/api/v1/assessments", signal);
 }

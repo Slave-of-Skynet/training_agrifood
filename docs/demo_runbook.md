@@ -1,10 +1,10 @@
-# Foundation demo runbook
+# Smart Harvest local demo runbook
 
-This runbook demonstrates connectivity and contract behavior only. It does **not** demonstrate agricultural validity, business accuracy, risk prediction, or loss reduction.
+This runbook demonstrates the training challenge replay and API behavior. It does not demonstrate production or live operation.
 
 ## 1. Start the backend
 
-Prerequisites from repository root:
+Prerequisites from the repository root:
 
 ```powershell
 python -m venv .venv
@@ -14,50 +14,43 @@ python -m pip install -e ".\backend[test]"
 
 Expected service origin: `http://localhost:8000`.
 
-### Mode A — No analytics runtime configuration (default)
+### Mode A — Analytics not configured
 
-Start without setting analytics environment variables:
+Start without analytics environment variables:
 
 ```powershell
-python -m uvicorn app.main:app --app-dir backend --reload
+Remove-Item Env:SMART_HARVEST_DATA_DIR -ErrorAction SilentlyContinue
+Remove-Item Env:SMART_HARVEST_BASELINE_ARTIFACT -ErrorAction SilentlyContinue
+python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
-Verify the API:
+Verify:
 
 ```powershell
 Invoke-RestMethod http://localhost:8000/api/v1/health
-Invoke-RestMethod http://localhost:8000/api/v1/demo/assessment
 ```
 
-Expected behavior:
-- `health.analytics = "not_configured"` (`status: ok`, `service: smart-harvest`).
-- `demo/assessment` returns the synthetic fixture (`status: insufficient_data`, `simulation: true`, notice `"SIMULATION / synthetic fixture / not challenge data"`, `risk = null`, `deterioration_horizon = null`, `recommendation = null`).
-- Real assessment route `GET /api/v1/assessments/{batch_id}` returns HTTP 503 ("Analytics runtime unavailable") with `Cache-Control: no-store`.
+Expected: `status = ok`, `analytics = not_configured`. The frontend shows a neutral queue availability message and does not automatically request `/api/v1/assessments`. Explicit manual Batch ID lookup remains available and returns HTTP 503 while analytics is not configured. The synthetic `GET /api/v1/demo/assessment` route remains a separate fixture API and is not used by this workspace.
 
-### Mode B — Configured RBS-01 backend
+### Mode B — Configured training baseline
 
-Configure runtime settings in PowerShell before launching:
+Set the runtime paths in the same PowerShell terminal before launching:
 
 ```powershell
-$env:SMART_HARVEST_DATA_DIR = "sponsor_pack/data"
-$env:SMART_HARVEST_BASELINE_ARTIFACT = "backend/artifacts/baseline-crop-median-v1-p1-s2024.json"
-python -m uvicorn app.main:app --app-dir backend --reload
+$env:SMART_HARVEST_DATA_DIR = (Resolve-Path "sponsor_pack/data")
+$env:SMART_HARVEST_BASELINE_ARTIFACT = (Resolve-Path "backend/artifacts/baseline-crop-median-v1-p1-s2024.json")
+.\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
-Verify the API:
+Verify:
 
 ```powershell
 Invoke-RestMethod http://localhost:8000/api/v1/health
+Invoke-RestMethod http://localhost:8000/api/v1/assessments
 Invoke-RestMethod http://localhost:8000/api/v1/assessments/BAT-000901
 ```
 
-Expected behavior:
-- `health.analytics = "ready"` (`status: ok`, `service: smart-harvest`).
-- `BAT-000901` is a recorded Season-2025 held-out training-challenge batch (not a production live batch).
-- `GET /api/v1/assessments/BAT-000901` returns HTTP 200 with `status: assessed`, `risk.score: 0.0644`, `simulation: true`, and notice `"SIMULATION / training challenge dataset / deterministic baseline / not production deployment"`.
-- Requests for Season-2024 training-partition batches (e.g. `BAT-000001`) return HTTP 409 ("Batch is not eligible for this assessment release").
-- Requests for unknown batch IDs return HTTP 404 ("Batch not found").
-- All assessment responses include `Cache-Control: no-store`.
+Expected: health reports `analytics = ready`. The collection returns HTTP 200 with `total_count = 18`, 18 items, `window_start = 2025-11-29T00:00:00+03:00`, and `window_end = 2025-12-01T00:00:00+03:00`. The API orders by severity score descending, then Batch ID ascending for ties. `BAT-000901` returns an assessed training challenge batch with `risk.score = 0.0644` and simulation notice `SIMULATION / training challenge dataset / deterministic baseline / not production deployment`. A Season-2024 training-partition batch such as `BAT-000001` returns HTTP 409; an unknown Batch ID returns HTTP 404. Assessment responses include `Cache-Control: no-store`.
 
 ## 2. Start the frontend
 
@@ -65,22 +58,18 @@ In a second terminal:
 
 ```powershell
 cd frontend
-npm install
-npm run dev
+npm ci
+npm run dev -- --host 127.0.0.1
 ```
 
-Open `http://localhost:5173`. The Vite dev server proxies `/api` to the backend. An explicit `VITE_API_BASE_URL` can override this for local integration.
+Open `http://127.0.0.1:5173`. Vite proxies `/api` to the backend. `VITE_API_BASE_URL` can override this for local integration.
 
-> [!NOTE]
-> **Frontend Limitation:** The current frontend operator shell fetches `GET /api/v1/health` and `GET /api/v1/demo/assessment` (synthetic fixture). It does **NOT** yet consume `GET /api/v1/assessments/{batch_id}`.
+With Mode B, the frontend requests health, then automatically loads the priority queue from `GET /api/v1/assessments`. It shows the effective replay window, count, engine version, Batch IDs, four-decimal predicted loss severity scores, and the returned simulation disclosure. Equal scores are ties; queue rows have no ordinal rank. No batch is initially selected. Selecting a queue row passes that collection assessment to the existing AssessmentCard without a second single-batch request. The independent single-batch lookup still sends `GET /api/v1/assessments/{batch_id}` and shows its normal 404/409/503 feedback.
 
-## Expected UI states
+Use browser Network or backend access logs to verify the request distinction: initial load sends health and collection GETs; queue selection sends no `GET /api/v1/assessments/{batch_id}`; manual lookup of `BAT-000901` sends that single-batch GET. At approximately 375 px, the page stacks queue, detail, lookup, then system status.
 
-- **Loading:** the shell shows `Connecting…` while initial API calls are pending.
-- **Success:** the shell shows `Connected`, health metadata (`Analytics: not configured` or `ready`), and the assessment card.
-- **Backend unavailable/error:** the shell shows `Unavailable`, preserves the error state, and offers `Try again`; it does not fabricate `status: ok`.
-- **Insufficient data:** the shell explicitly withholds risk percentage and deterioration horizon and explains why.
+If the backend cannot be reached, the page shows `Unavailable` and `Try again`. If analytics is not ready, the reachable backend status remains visible and the queue is not automatically loaded. A collection request failure is shown locally in the queue with a retry control.
 
 ## Reset
 
-Reset is N/A for this stateless foundation. Use `Try again` or reload the page to fetch a fresh response.
+Reload the page to fetch a fresh replay. No stateful reset is required.

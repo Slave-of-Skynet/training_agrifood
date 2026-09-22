@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, getAssessment, getHealth } from "../api/client";
 import type { HealthResponse, RiskAssessment } from "../api/contracts";
 import { AssessmentCard } from "../components/AssessmentCard";
+import { AssessmentQueue } from "../components/AssessmentQueue";
 import { BackendStatus } from "../components/BackendStatus";
 import { BatchAssessmentLookup } from "../components/BatchAssessmentLookup";
 
@@ -25,8 +26,16 @@ export function HomePage() {
     kind: "idle",
   });
   const [reloadKey, setReloadKey] = useState(0);
+  const [selectedQueueBatchId, setSelectedQueueBatchId] = useState<string>();
+  const manualRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => () => manualRequest.current?.abort(), []);
 
   const retryHealth = useCallback(() => {
+    manualRequest.current?.abort();
+    manualRequest.current = null;
+    setAssessmentState({ kind: "idle" });
+    setSelectedQueueBatchId(undefined);
     setHealthConnection({ kind: "loading" });
     setReloadKey((current) => current + 1);
   }, []);
@@ -51,13 +60,19 @@ export function HomePage() {
     const trimmed = batchId.trim();
     if (!trimmed) return;
 
+    manualRequest.current?.abort();
+    const controller = new AbortController();
+    manualRequest.current = controller;
+    setSelectedQueueBatchId(undefined);
     setAssessmentState({ kind: "loading", batchId: trimmed });
 
-    getAssessment(trimmed)
+    getAssessment(trimmed, controller.signal)
       .then((assessment) => {
+        if (controller.signal.aborted) return;
         setAssessmentState({ kind: "success", assessment });
       })
       .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
         if (error instanceof ApiError) {
           setAssessmentState({
             kind: "error",
@@ -73,7 +88,17 @@ export function HomePage() {
             message,
           });
         }
+      })
+      .finally(() => {
+        if (manualRequest.current === controller) manualRequest.current = null;
       });
+  }, []);
+
+  const handleQueueSelect = useCallback((assessment: RiskAssessment) => {
+    manualRequest.current?.abort();
+    manualRequest.current = null;
+    setSelectedQueueBatchId(assessment.batch_id);
+    setAssessmentState({ kind: "success", assessment });
   }, []);
 
   return (
@@ -111,19 +136,31 @@ export function HomePage() {
       )}
 
       {healthConnection.kind === "available" && (
-        <div className="content-grid">
-          <div className="workspace-main">
-            <BatchAssessmentLookup
-              onSubmit={handleLookup}
-              isLoading={assessmentState.kind === "loading"}
-            />
+        <div className="workspace-grid">
+          <div className="workspace-queue">
+            {healthConnection.health.analytics === "ready" ? (
+              <AssessmentQueue
+                onSelect={handleQueueSelect}
+                selectedBatchId={selectedQueueBatchId}
+              />
+            ) : (
+              <section className="panel queue-panel" aria-labelledby="queue-heading">
+                <p className="eyebrow">Ranked replay queue</p>
+                <h2 id="queue-heading">Priority Queue</h2>
+                <p className="status-note">
+                  The priority queue is available when analytics is ready.
+                </p>
+              </section>
+            )}
+          </div>
 
+          <div className="workspace-detail">
             {assessmentState.kind === "idle" && (
               <section className="panel assessment-idle-panel" aria-labelledby="idle-heading">
                 <p className="eyebrow">Batch Review</p>
-                <h2 id="idle-heading">No batch loaded</h2>
+                <h2 id="idle-heading">Select a batch to review</h2>
                 <p className="status-note">
-                  Enter a Batch ID above and select &ldquo;Load assessment&rdquo; to review an assessment.
+                  Select a batch from the priority queue or use the single-batch lookup.
                 </p>
               </section>
             )}
@@ -169,7 +206,14 @@ export function HomePage() {
             )}
           </div>
 
-          <aside className="workspace-aside">
+          <div className="workspace-lookup">
+            <BatchAssessmentLookup
+              onSubmit={handleLookup}
+              isLoading={assessmentState.kind === "loading"}
+            />
+          </div>
+
+          <aside className="workspace-status">
             <BackendStatus health={healthConnection.health} />
           </aside>
         </div>
