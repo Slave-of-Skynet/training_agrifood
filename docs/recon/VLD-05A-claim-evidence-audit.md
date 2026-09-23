@@ -122,7 +122,7 @@ Exact values below are read from JSON, with Markdown reports checked for materia
 
 ### A. Concrete current runtime engine — possible final-use metrics
 
-For every row: task VDR-06A, corroborated by VDR-06B API metric parity; engine `baseline-crop-median-v1-p1-s2024`; feature family **crop identity only**; protocol **P1 forward inter-season**; population **held-out operational Season 2025**; N **900**; source `docs/data_recon/06a_baseline_evaluation_results.json` → `evaluation_results.p1_inter_season`, independently checked against `docs/data_recon/06b_runtime_release_parity_results.json` → `runtime_p1_metric_parity`; **current runtime = yes**. Each row inherits these explicit fields.
+For every row: task VDR-06A, corroborated by VDR-06B API metric parity; engine `baseline-crop-median-v1-p1-s2024`; feature family **crop identity only**; protocol **P1 forward inter-season**; population held-out Season-2025 training-challenge cohort from the supplied snapshot; N **900**; source `docs/data_recon/06a_baseline_evaluation_results.json` → `evaluation_results.p1_inter_season`, independently checked against `docs/data_recon/06b_runtime_release_parity_results.json` → `runtime_p1_metric_parity`; **current runtime = yes**. Each row inherits these explicit fields.
 
 | Metric ID | Exact value | Task / engine / family / protocol / population / N / source / current? | Safe interpretation | Forbidden interpretation |
 | --- | ---: | --- | --- | --- |
