@@ -50,7 +50,7 @@ Independent teammate reproduction is intentionally decoupled from this documenta
   - Versioned deterministic baseline artifact: `backend/artifacts/baseline-crop-median-v1-p1-s2024.json`.
   - Required process environment variables: `SMART_HARVEST_DATA_DIR`, `SMART_HARVEST_BASELINE_ARTIFACT`.
   - Optional CORS configuration: `SMART_HARVEST_CORS_ORIGINS` (defaults to `http://localhost:5173`).
-- **Frontend:** React 19 + TypeScript + Vite 8.3 (`frontend/`).
+- **Frontend:** React 18.3 + TypeScript + Vite 8.3 (`frontend/`).
   - Clean install: `npm ci`.
   - Development proxy: `frontend/vite.config.ts` proxies `/api` requests to `http://localhost:8000`.
   - Direct API origin override: `VITE_API_BASE_URL` (optional; empty uses same-origin / proxy).
@@ -237,7 +237,7 @@ This evidence is intentionally deferred to **VLD-04B — Independent Reproductio
 ### Rationale
 1. Zero demo-time Internet dependency (immune to hackathon venue Wi-Fi congestion or collapse).
 2. Pinned sponsor dataset and baseline artifact are guaranteed local and immediate.
-3. Zero cloud cold starts (free-tier 30–60s sleeps), container lifecycle, or ephemeral storage issues.
+3. No cloud cold-start or remote-host lifecycle dependency during the authoritative demo.
 4. No cross-origin production hosting topology, reverse proxy, or SSL certificate management required.
 5. VLD-03 and VLD-04 have already proven this configuration end-to-end with high stability.
 

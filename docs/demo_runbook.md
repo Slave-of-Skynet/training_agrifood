@@ -1,7 +1,7 @@
 # Smart Harvest local demo runbook
 
 This runbook provides the reproducible procedure for demonstrating the Smart Harvest decision support prototype.
-This is a **SIMULATION / training challenge** demonstration on recorded sponsor data. It does not demonstrate production deployment, live commercial operations, or learned machine learning models.
+This is a **SIMULATION / training challenge** demonstration on the supplied training-challenge snapshot. It does not demonstrate production deployment, live commercial operations, or learned machine learning models.
 
 ---
 
