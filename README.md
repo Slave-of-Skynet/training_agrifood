@@ -103,7 +103,7 @@ cd frontend
 npm run build
 ```
 
-The backend tests validate all endpoints (health, demo fixture, and dataset-backed baseline route) and enforce domain contract invariants. The frontend build runs TypeScript checking before bundling.
+The backend tests validate endpoints (health, demo fixture, single-batch assessment, and collection assessment) and enforce domain contract behavior and invariants. The frontend build runs TypeScript checking before bundling.
 
 See [`scripts/README.md`](scripts/README.md) for script lifecycle and evidence reproduction rules.
 
@@ -116,7 +116,7 @@ See [`scripts/README.md`](scripts/README.md) for script lifecycle and evidence r
 - [`docs/data_contract.md`](docs/data_contract.md) — current output/application contract.
 - [`docs/evaluation.md`](docs/evaluation.md) — evaluation principles without unsupported targets.
 - [`docs/domain_rules.md`](docs/domain_rules.md) — guardrails for future agronomic rules.
-- [`docs/demo_runbook.md`](docs/demo_runbook.md) — foundation demo procedure.
+- [`docs/demo_runbook.md`](docs/demo_runbook.md) — local-first demo and fallback procedure.
 - [`docs/team_roles.md`](docs/team_roles.md) — current SoS challenge-specific ownership.
 - [`docs/workstreams/`](docs/workstreams/) — SoS challenge-specific operating guides for the five team workstreams.
 - [`docs/decisions/0001-foundation-architecture.md`](docs/decisions/0001-foundation-architecture.md) — foundation ADR.

@@ -46,7 +46,7 @@ Independent teammate reproduction is intentionally decoupled from this documenta
 
 ### Committed Runtime Resources & Settings
 - **Backend:** Python / FastAPI (`backend/app/main.py`).
-  - Pinned sponsor dataset snapshot: `sponsor_pack/data/` (7 CSV tables).
+  - Pinned supplied training-challenge snapshot: `sponsor_pack/data/` (7 CSV tables).
   - Versioned deterministic baseline artifact: `backend/artifacts/baseline-crop-median-v1-p1-s2024.json`.
   - Required process environment variables: `SMART_HARVEST_DATA_DIR`, `SMART_HARVEST_BASELINE_ARTIFACT`.
   - Optional CORS configuration: `SMART_HARVEST_CORS_ORIGINS` (defaults to `http://localhost:5173`).
@@ -168,8 +168,8 @@ Verified without altering any source code:
 
 We distinguish two separate operational boundaries:
 
-### A. Post-Installation Runtime Boundary (100% Offline)
-- Once `.venv` and `frontend/node_modules` are installed, **the entire Smart Harvest runtime operates completely offline**.
+### A. Post-Installation Runtime Boundary (No External Runtime Service Required)
+- Once `.venv` and `frontend/node_modules` are installed, **no external runtime service is required**.
 - The backend reads exclusively from committed local files (`sponsor_pack/data/` and `backend/artifacts/`).
 - The frontend connects exclusively to local backend endpoints (`127.0.0.1:8000`).
 - No external CDNs, fonts, telemetry, external database connections, or cloud APIs are queried at runtime.
@@ -236,10 +236,10 @@ This evidence is intentionally deferred to **VLD-04B — Independent Reproductio
 
 ### Rationale
 1. Zero demo-time Internet dependency (immune to hackathon venue Wi-Fi congestion or collapse).
-2. Pinned sponsor dataset and baseline artifact are guaranteed local and immediate.
+2. Pinned supplied training-challenge snapshot and baseline artifact are guaranteed local and immediate.
 3. No cloud cold-start or remote-host lifecycle dependency during the authoritative demo.
 4. No cross-origin production hosting topology, reverse proxy, or SSL certificate management required.
-5. VLD-03 and VLD-04 have already proven this configuration end-to-end with high stability.
+5. VLD-03 and the executed VLD-04A operational evidence exercised this configuration end-to-end locally.
 
 ---
 
